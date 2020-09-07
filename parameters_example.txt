@@ -1,0 +1,26 @@
+//******************************************************************
+//Input parameters
+//the years of the data ("," is necessary to separate data)
+Years = 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018
+
+//the path of the NDVI data
+NDVI_path = ../TestData/NDVI/NDVI_test_
+
+//the path of the NDVI quality flags
+Reliability_path = ../TestData/Reliability/Reliability_test_
+
+//the path of the production
+STSG_Test_path = ../TestData/STSG_Test.tif
+
+//the thereshold of cosine similarity to define similar years
+cosyear = 0.90
+
+//the half size of the neighboring window within which to search similar pixels
+win = 10
+
+//the thereshold of correlation coefficient to define similar pixels
+sampcorr = 0.9
+
+//snow_address indicates whether to deal with snow contamianted NDVI values(1 = yes / 0 = no)
+snow_address = 1
+//******************************************************************
