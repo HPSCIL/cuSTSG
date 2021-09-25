@@ -15,6 +15,9 @@ STSG_Test_path = ../TestData/STSG_Test.tif
 //the thereshold of cosine similarity to define similar years
 cosyear = 0.90
 
+//the half size of the window within which to search pixels with inaccurate quality flags in the dissimilar year
+win_year = 2
+
 //the half size of the neighboring window within which to search similar pixels
 win = 10
 

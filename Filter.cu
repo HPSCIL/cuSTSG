@@ -33,7 +33,7 @@ __global__ void Short_to_Float(short *imgNDVI, unsigned char *imgQA, int n_X, in
 	}
 }
 
-__global__ void Generate_NDVI_reference(float cosyear, float *img_NDVI, float *img_QA, int n_X, int n_Y, int n_B, int n_Years, float *reference_data, float *d_res_3, int *d_res_vec_res1)
+__global__ void Generate_NDVI_reference(float cosyear, int win_year, float *img_NDVI, float *img_QA, int n_X, int n_Y, int n_B, int n_Years, float *reference_data, float *d_res_3, int *d_res_vec_res1)
 {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= n_X)
@@ -43,47 +43,145 @@ __global__ void Generate_NDVI_reference(float cosyear, float *img_NDVI, float *i
 		return;
 
 	//calculating cosine similarity
-	float *res_cosyear = &d_res_3[(i + j*n_X)*(n_Years - 1)];
-	for (int y = 0; y < n_Years - 1; y++)
+	float* res_cosyear = &d_res_3[(i + j * n_X) * (n_Years + 1) * n_Years];
+	for (int y_1 = 0; y_1 < n_Years; y_1++)
 	{
-		double xy_sum = 0;
-		double x2_sum = 0;
-		double y2_sum = 0;
-		for (int k = 0; k < n_B; k++)
+		for (int y_2 = y_1 + 1; y_2 < n_Years; y_2++)
 		{
-			if ((img_QA[i + j *n_X + k*n_X *n_Y + y*n_X*n_Y*n_B] == 0 || img_QA[i + j *n_X + k*n_X*n_Y + y*n_X*n_Y*n_B] == 1)
-				&& (img_QA[i + j *n_X + k*n_X *n_Y + (y + 1)*n_X*n_Y*n_B] == 0 || img_QA[i + j *n_X + k*n_X*n_Y + (y + 1)*n_X*n_Y*n_B] == 1))
+			double xy_sum = 0;
+			double x2_sum = 0;
+			double y2_sum = 0;
+			for (int k = 0; k < n_B; k++)
 			{
-				xy_sum += img_NDVI[i + j *n_X + k*n_X *n_Y + y*n_X*n_Y*n_B] * img_NDVI[i + j *n_X + k*n_X *n_Y + (y + 1)*n_X*n_Y*n_B];
-				x2_sum += img_NDVI[i + j *n_X + k*n_X *n_Y + y*n_X*n_Y*n_B] * img_NDVI[i + j *n_X + k*n_X *n_Y + y*n_X*n_Y*n_B];
-				y2_sum += img_NDVI[i + j *n_X + k*n_X *n_Y + (y + 1)*n_X*n_Y*n_B] * img_NDVI[i + j *n_X + k*n_X *n_Y + (y + 1)*n_X*n_Y*n_B];
+				if ((img_QA[i + j * n_X + k * n_X * n_Y + y_1 * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + k * n_X * n_Y + y_1 * n_X * n_Y * n_B] == 1)
+					&& (img_QA[i + j * n_X + k * n_X * n_Y + y_2 * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + k * n_X * n_Y + y_2 * n_X * n_Y * n_B] == 1))
+				{
+					xy_sum += img_NDVI[i + j * n_X + k * n_X * n_Y + y_1 * n_X * n_Y * n_B] * img_NDVI[i + j * n_X + k * n_X * n_Y + y_2 * n_X * n_Y * n_B];
+					x2_sum += img_NDVI[i + j * n_X + k * n_X * n_Y + y_1 * n_X * n_Y * n_B] * img_NDVI[i + j * n_X + k * n_X * n_Y + y_1 * n_X * n_Y * n_B];
+					y2_sum += img_NDVI[i + j * n_X + k * n_X * n_Y + y_2 * n_X * n_Y * n_B] * img_NDVI[i + j * n_X + k * n_X * n_Y + y_2 * n_X * n_Y * n_B];
+				}
+			}
+			if (x2_sum != 0 && y2_sum != 0)
+			{
+				res_cosyear[y_2 + y_1 * n_Years] = xy_sum / sqrt(x2_sum * y2_sum);
+				res_cosyear[y_1 + y_2 * n_Years] = xy_sum / sqrt(x2_sum * y2_sum);
+				res_cosyear[y_1 + y_1 * n_Years] += xy_sum / sqrt(x2_sum * y2_sum);
+				res_cosyear[y_2 + y_2 * n_Years] += xy_sum / sqrt(x2_sum * y2_sum);
 			}
 		}
-		res_cosyear[y] = xy_sum / sqrt(x2_sum*y2_sum);
+		res_cosyear[y_1 + y_1 * n_Years] = res_cosyear[y_1 + y_1 * n_Years] / (n_Years - 1);
+		res_cosyear[n_Years * n_Years] += res_cosyear[y_1 + y_1 * n_Years];
+	}
+	res_cosyear[n_Years * n_Years] = res_cosyear[n_Years * n_Years] / n_Years;
+
+	for (int y = 0; y < n_Years; y++)
+		res_cosyear[n_Years * n_Years + 1] += (res_cosyear[y + y * n_Years] - res_cosyear[n_Years * n_Years]) * (res_cosyear[y + y * n_Years] - res_cosyear[n_Years * n_Years]);
+	res_cosyear[n_Years * n_Years + 1] = res_cosyear[n_Years * n_Years + 1] / n_Years;
+
+	int n_res_cosyear = 0;
+	for (int y_1 = 0; y_1 < n_Years; y_1++)
+	{
+		res_cosyear[y_1] = res_cosyear[y_1 + y_1 * n_Years];
+		if (res_cosyear[y_1] >= (res_cosyear[n_Years * n_Years] - sqrt(res_cosyear[n_Years * n_Years + 1])) || res_cosyear[y_1] >= cosyear)
+		{
+			for (int y_2 = y_1 + 1; y_2 < n_Years; y_2++)
+			{
+				if (res_cosyear[y_2 + y_2 * n_Years] >= (res_cosyear[n_Years * n_Years] - sqrt(res_cosyear[n_Years * n_Years + 1])) || res_cosyear[y_2] >= cosyear)
+				{
+					res_cosyear[n_Years * n_Years + 2] += res_cosyear[y_2 + y_1 * n_Years];
+					n_res_cosyear++;
+				}
+			}
+		}
+	}
+	res_cosyear[n_Years * n_Years + 2] = res_cosyear[n_Years * n_Years + 2] / n_res_cosyear;
+
+	for (int y = 0; y < (n_Years - 1) * n_Years; y++)
+		res_cosyear[y + n_Years] = 0;
+
+	int n_dissimilar_year = 0;
+	for (int y_1 = 0; y_1 < n_Years; y_1++)
+	{
+		if (res_cosyear[y_1] < (res_cosyear[n_Years * n_Years] - sqrt(res_cosyear[n_Years * n_Years + 1])) && res_cosyear[y_1] < cosyear)
+		{
+			for (int c_k = 0; c_k < n_B; c_k++)
+			{
+				int n_similar_year = 0;
+				for (int y_2 = 0; y_2 < n_Years; y_2++)
+				{
+					if (res_cosyear[y_2] >= (res_cosyear[n_Years * n_Years] - sqrt(res_cosyear[n_Years * n_Years + 1]))
+						|| res_cosyear[y_2] >= cosyear
+						&& (img_QA[i + j * n_X + c_k * n_X * n_Y + y_1 * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + c_k * n_X * n_Y + y_1 * n_X * n_Y * n_B] == 1)
+						&& (img_QA[i + j * n_X + c_k * n_X * n_Y + y_2 * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + c_k * n_X * n_Y + y_2 * n_X * n_Y * n_B] == 1))
+					{
+						double xy_sum = 0;
+						double x2_sum = 0;
+						double y2_sum = 0;
+						for (int k = 1, n = 0; n < win_year * 2 + 1 && ((c_k + k) < n_B || (c_k - k) >= 0); k++)
+						{
+							if ((c_k - k) >= 0
+								&& (img_QA[i + j * n_X + (c_k - k) * n_X * n_Y + y_1 * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + (c_k - k) * n_X * n_Y + y_1 * n_X * n_Y * n_B] == 1)
+								&& (img_QA[i + j * n_X + (c_k - k) * n_X * n_Y + y_2 * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + (c_k - k) * n_X * n_Y + y_2 * n_X * n_Y * n_B] == 1))
+							{
+								xy_sum += img_NDVI[i + j * n_X + (c_k - k) * n_X * n_Y + y_1 * n_X * n_Y * n_B] * img_NDVI[i + j * n_X + (c_k - k) * n_X * n_Y + y_2 * n_X * n_Y * n_B];
+								x2_sum += img_NDVI[i + j * n_X + (c_k - k) * n_X * n_Y + y_1 * n_X * n_Y * n_B] * img_NDVI[i + j * n_X + (c_k - k) * n_X * n_Y + y_1 * n_X * n_Y * n_B];
+								y2_sum += img_NDVI[i + j * n_X + (c_k - k) * n_X * n_Y + y_2 * n_X * n_Y * n_B] * img_NDVI[i + j * n_X + (c_k - k) * n_X * n_Y + y_2 * n_X * n_Y * n_B];
+								n++;
+							}
+							if ((c_k + k) < n_B
+								&& (img_QA[i + j * n_X + (c_k + k) * n_X * n_Y + y_1 * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + (c_k + k) * n_X * n_Y + y_1 * n_X * n_Y * n_B] == 1)
+								&& (img_QA[i + j * n_X + (c_k + k) * n_X * n_Y + y_2 * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + (c_k + k) * n_X * n_Y + y_2 * n_X * n_Y * n_B] == 1))
+							{
+								xy_sum += img_NDVI[i + j * n_X + (c_k + k) * n_X * n_Y + y_1 * n_X * n_Y * n_B] * img_NDVI[i + j * n_X + (c_k + k) * n_X * n_Y + y_2 * n_X * n_Y * n_B];
+								x2_sum += img_NDVI[i + j * n_X + (c_k + k) * n_X * n_Y + y_1 * n_X * n_Y * n_B] * img_NDVI[i + j * n_X + (c_k + k) * n_X * n_Y + y_1 * n_X * n_Y * n_B];
+								y2_sum += img_NDVI[i + j * n_X + (c_k + k) * n_X * n_Y + y_2 * n_X * n_Y * n_B] * img_NDVI[i + j * n_X + (c_k + k) * n_X * n_Y + y_2 * n_X * n_Y * n_B];
+								n++;
+							}
+						}
+						if (x2_sum != 0 && y2_sum != 0)
+						{
+							res_cosyear[c_k + n_dissimilar_year * n_B + n_Years] += xy_sum / sqrt(x2_sum * y2_sum);
+							n_similar_year++;
+						}
+					}
+				}
+				if (n_similar_year != 0)
+					res_cosyear[c_k + n_dissimilar_year * n_B + n_Years] = res_cosyear[c_k + n_dissimilar_year * n_B + n_Years] / n_similar_year;
+			}
+			n_dissimilar_year++;
+		}
 	}
 
 	int count_vec_res1 = 0;
-	int *res_vec_res1 = &d_res_vec_res1[(i + j*n_X)*n_B];
+	int* res_vec_res1 = &d_res_vec_res1[(i + j * n_X) * n_B];
 	for (int k = 0; k < n_B; k++)
 	{
 		int count_img_QA = 0;
 		float mean_img_QA = 0;
-		if ((res_cosyear[0] >= cosyear) && (img_QA[i + j *n_X + k*n_X *n_Y] == 0 || img_QA[i + j *n_X + k*n_X*n_Y] == 1))
+		n_dissimilar_year = 0;
+		for (int y = 0; y < n_Years; y++)
 		{
-			count_img_QA++;
-			mean_img_QA += img_NDVI[i + j *n_X + k*n_X*n_Y];
-		}
-		for (int y = 0; y < n_Years - 1; y++)
-		{
-			if ((res_cosyear[y] >= cosyear) && (img_QA[i + j *n_X + k*n_X *n_Y + (y + 1)*n_X*n_Y*n_B] == 0 || img_QA[i + j *n_X + k*n_X*n_Y + (y + 1)*n_X*n_Y*n_B] == 1))
+			if (res_cosyear[y] >= (res_cosyear[n_Years * n_Years] - sqrt(res_cosyear[n_Years * n_Years + 1])) || res_cosyear[y] >= cosyear)
 			{
-				count_img_QA++;
-				mean_img_QA += img_NDVI[i + j *n_X + k*n_X*n_Y + (y + 1)*n_X*n_Y*n_B];
+				if (img_QA[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B] == 1)
+				{
+					count_img_QA++;
+					mean_img_QA += img_NDVI[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B];
+				}
+			}
+			else
+			{
+				if ((res_cosyear[k + n_dissimilar_year * n_B + n_Years] >= res_cosyear[n_Years * n_Years + 2]) && (img_QA[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B] == 1))
+				{
+					count_img_QA++;
+					mean_img_QA += img_NDVI[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B];
+				}
+				n_dissimilar_year++;
 			}
 		}
 		if (count_img_QA >= 1)
 		{
-			reference_data[i + j*n_X + k*n_X*n_Y] = mean_img_QA / count_img_QA;
+			reference_data[i + j * n_X + k * n_X * n_Y] = mean_img_QA / count_img_QA;
 			res_vec_res1[count_vec_res1++] = k;
 		}
 	}

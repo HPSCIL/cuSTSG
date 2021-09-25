@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
 	int* Years = nullptr;
 	string NDVI_path, Reliability_path, STSG_Test_path;
 	float cosyear, sampcorr;
-	int win, snow_address, n_Years;
+	int win_year, win, snow_address, n_Years;
 	string par;
 	while (getline(parameter, par))
 	{
@@ -83,6 +83,8 @@ int main(int argc, char *argv[])
 			STSG_Test_path = par.substr(par.find("=") + 1);
 		else if (par.substr(0, par.find("=")) == "cosyear")
 			cosyear = stof(par.substr(par.find("=") + 1));
+		else if (par.substr(0, par.find("=")) == "win_year")
+			win_year = stoi(par.substr(par.find("=") + 1));
 		else if (par.substr(0, par.find("=")) == "win")
 			win = stoi(par.substr(par.find("=") + 1));
 		else if (par.substr(0, par.find("=")) == "sampcorr")
@@ -228,7 +230,7 @@ int main(int argc, char *argv[])
 		Short_to_Float << <grids, blocks >> >(d_imgNDVI, d_imgQA, n_X, (PerStep + Buffer_Up + Buffer_Dn), n_B, n_Years, d_img_NDVI, d_img_QA);
 		cudaDeviceSynchronize();
 
-		Generate_NDVI_reference << <grids, blocks >> >(cosyear, d_img_NDVI, d_img_QA, n_X, (PerStep + Buffer_Up + Buffer_Dn), n_B, n_Years, d_NDVI_Reference, d_res_3, d_res_vec_res1);
+		Generate_NDVI_reference << <grids, blocks >> >(cosyear, win_year, d_img_NDVI, d_img_QA, n_X, (PerStep + Buffer_Up + Buffer_Dn), n_B, n_Years, d_NDVI_Reference, d_res_3, d_res_vec_res1);
 		cudaDeviceSynchronize();
 
 		nBytes = PerStep*n_X*(2 * win + 1)*(2 * win + 1) * 3 * sizeof(float);
