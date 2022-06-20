@@ -26,14 +26,14 @@ __global__ void Short_to_Float(short *imgNDVI, unsigned char *imgQA, int n_X, in
 			img_NDVI[i + j*n_X + k*n_X*n_Y + y*n_X*n_Y*n_B] = float(imgNDVI[i + j*n_X + k*n_X*n_Y + y*n_X*n_Y*n_B]) / 10000;
 			img_QA[i + j*n_X + k*n_X*n_Y + y*n_X*n_Y*n_B] = float(imgQA[i + j*n_X + k*n_X*n_Y + y*n_X*n_Y*n_B]);
 
-			if (img_NDVI[i + j*n_X + k*n_X*n_Y + y*n_X*n_Y*n_B] <= -1 || img_NDVI[i + j*n_X + k*n_X*n_Y + y*n_X*n_Y*n_B] >= 1
+			if (img_NDVI[i + j*n_X + k*n_X*n_Y + y*n_X*n_Y*n_B] < -0.2 || img_NDVI[i + j*n_X + k*n_X*n_Y + y*n_X*n_Y*n_B] > 1
 				|| img_QA[i + j*n_X + k*n_X*n_Y + y*n_X*n_Y*n_B] < -1 || img_QA[i + j*n_X + k*n_X*n_Y + y*n_X*n_Y*n_B]>3)
 				img_QA[i + j*n_X + k*n_X*n_Y + y*n_X*n_Y*n_B] = -1;
 		}
 	}
 }
 
-__global__ void Generate_NDVI_reference(float cosyear, int win_year, float *img_NDVI, float *img_QA, int n_X, int n_Y, int n_B, int n_Years, float *reference_data, float *d_res_3, int *d_res_vec_res1)
+__global__ void Generate_NDVI_reference(float cosyear, int win_NDVI, float *img_NDVI, float *img_QA, int n_X, int n_Y, int n_B, int n_Years, float *reference_data, float *d_res_3, int *d_res_vec_res1)
 {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= n_X)
@@ -76,48 +76,86 @@ __global__ void Generate_NDVI_reference(float cosyear, int win_year, float *img_
 
 	for (int y = 0; y < n_Years; y++)
 		res_cosyear[n_Years * n_Years + 1] += (res_cosyear[y + y * n_Years] - res_cosyear[n_Years * n_Years]) * (res_cosyear[y + y * n_Years] - res_cosyear[n_Years * n_Years]);
-	res_cosyear[n_Years * n_Years + 1] = res_cosyear[n_Years * n_Years + 1] / n_Years;
+	res_cosyear[n_Years * n_Years + 1] = sqrt(res_cosyear[n_Years * n_Years + 1] / n_Years);
+	res_cosyear[n_Years * n_Years] = res_cosyear[n_Years * n_Years] - res_cosyear[n_Years * n_Years + 1];
 
-	int n_res_cosyear = 0;
+	//window
 	for (int y_1 = 0; y_1 < n_Years; y_1++)
-	{
 		res_cosyear[y_1] = res_cosyear[y_1 + y_1 * n_Years];
-		if (res_cosyear[y_1] >= (res_cosyear[n_Years * n_Years] - sqrt(res_cosyear[n_Years * n_Years + 1])) || res_cosyear[y_1] >= cosyear)
+	res_cosyear[n_Years] = res_cosyear[n_Years * n_Years];
+	for (int y = n_Years + 1; y < ((n_Years + 1) * n_Years); y++)
+		res_cosyear[y] = 0;
+
+	for (int k = 0; k < n_B; k++)
+	{
+		int count_img_QA = 0;
+		float mean_img_QA = 0;
+		for (int y = 0; y < n_Years; y++)
 		{
-			for (int y_2 = y_1 + 1; y_2 < n_Years; y_2++)
+			if (res_cosyear[y] >= res_cosyear[n_Years] || res_cosyear[y] >= cosyear)
 			{
-				if (res_cosyear[y_2 + y_2 * n_Years] >= (res_cosyear[n_Years * n_Years] - sqrt(res_cosyear[n_Years * n_Years + 1])) || res_cosyear[y_2] >= cosyear)
+				if (img_QA[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B] == 1)
 				{
-					res_cosyear[n_Years * n_Years + 2] += res_cosyear[y_2 + y_1 * n_Years];
-					n_res_cosyear++;
+					count_img_QA++;
+					mean_img_QA += img_NDVI[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B];
 				}
 			}
 		}
+		if (count_img_QA >= 1)
+			reference_data[i + j * n_X + k * n_X * n_Y] = mean_img_QA / count_img_QA;
 	}
-	res_cosyear[n_Years * n_Years + 2] = res_cosyear[n_Years * n_Years + 2] / n_res_cosyear;
-
-	for (int y = 0; y < (n_Years - 1) * n_Years; y++)
-		res_cosyear[y + n_Years] = 0;
 
 	int n_dissimilar_year = 0;
 	for (int y_1 = 0; y_1 < n_Years; y_1++)
 	{
-		if (res_cosyear[y_1] < (res_cosyear[n_Years * n_Years] - sqrt(res_cosyear[n_Years * n_Years + 1])) && res_cosyear[y_1] < cosyear)
+		if (res_cosyear[y_1] < res_cosyear[n_Years] &&res_cosyear[y_1] < cosyear)
 		{
+			int new_k = 0;
+			for (int k2 = -2; k2 <= 2; k2++)
+			{
+				if (k2 == 0)
+					continue;
+				double xy_sum = 0;
+				double x2_sum = 0;
+				double y2_sum = 0;
+				for (int k = 0; k < n_B; k++)
+				{
+					if ((k + k2) < 0 || k + k2 >= n_B)
+						continue;
+					if ((img_QA[i + j * n_X + (k + k2) * n_X * n_Y + y_1 * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + (k + k2) * n_X * n_Y + y_1 * n_X * n_Y * n_B] == 1)
+						&& (reference_data[i + j * n_X + k * n_X * n_Y] != 0))
+					{
+						xy_sum += img_NDVI[i + j * n_X + (k + k2) * n_X * n_Y + y_1 * n_X * n_Y * n_B] * reference_data[i + j * n_X + k * n_X * n_Y];
+						x2_sum += img_NDVI[i + j * n_X + (k + k2) * n_X * n_Y + y_1 * n_X * n_Y * n_B] * img_NDVI[i + j * n_X + (k + k2) * n_X * n_Y + y_1 * n_X * n_Y * n_B];
+						y2_sum += reference_data[i + j * n_X + k * n_X * n_Y] * reference_data[i + j * n_X + k * n_X * n_Y];
+					}
+				}
+				if (x2_sum != 0 && y2_sum != 0)
+				{
+					res_cosyear[n_Years + 1] = xy_sum / sqrt(x2_sum * y2_sum);
+					if (res_cosyear[n_Years + 1] > res_cosyear[y_1])
+					{
+						res_cosyear[y_1] = res_cosyear[n_Years + 1];
+						new_k = k2;
+					}
+				}
+			}
+			if (res_cosyear[y_1] >= res_cosyear[n_Years] || res_cosyear[y_1] >= cosyear)
+				continue;
+
 			for (int c_k = 0; c_k < n_B; c_k++)
 			{
 				int n_similar_year = 0;
 				for (int y_2 = 0; y_2 < n_Years; y_2++)
 				{
-					if (res_cosyear[y_2] >= (res_cosyear[n_Years * n_Years] - sqrt(res_cosyear[n_Years * n_Years + 1]))
-						|| res_cosyear[y_2] >= cosyear
+					if (res_cosyear[y_2] >= res_cosyear[n_Years]|| res_cosyear[y_2] >= cosyear
 						&& (img_QA[i + j * n_X + c_k * n_X * n_Y + y_1 * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + c_k * n_X * n_Y + y_1 * n_X * n_Y * n_B] == 1)
 						&& (img_QA[i + j * n_X + c_k * n_X * n_Y + y_2 * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + c_k * n_X * n_Y + y_2 * n_X * n_Y * n_B] == 1))
 					{
 						double xy_sum = 0;
 						double x2_sum = 0;
 						double y2_sum = 0;
-						for (int k = 1, n = 0; n < win_year * 2 + 1 && ((c_k + k) < n_B || (c_k - k) >= 0); k++)
+						for (int k = 1, n = 0; n < win_NDVI * 2 + 1&&((c_k + k)<n_B || (c_k - k) >= 0); k++)
 						{
 							if ((c_k - k) >= 0
 								&& (img_QA[i + j * n_X + (c_k - k) * n_X * n_Y + y_1 * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + (c_k - k) * n_X * n_Y + y_1 * n_X * n_Y * n_B] == 1)
@@ -146,7 +184,7 @@ __global__ void Generate_NDVI_reference(float cosyear, int win_year, float *img_
 					}
 				}
 				if (n_similar_year != 0)
-					res_cosyear[c_k + n_dissimilar_year * n_B + n_Years] = res_cosyear[c_k + n_dissimilar_year * n_B + n_Years] / n_similar_year;
+					res_cosyear[c_k + n_dissimilar_year * n_B + n_Years+2] = res_cosyear[c_k + n_dissimilar_year * n_B + n_Years + 2] / n_similar_year;
 			}
 			n_dissimilar_year++;
 		}
@@ -161,7 +199,7 @@ __global__ void Generate_NDVI_reference(float cosyear, int win_year, float *img_
 		n_dissimilar_year = 0;
 		for (int y = 0; y < n_Years; y++)
 		{
-			if (res_cosyear[y] >= (res_cosyear[n_Years * n_Years] - sqrt(res_cosyear[n_Years * n_Years + 1])) || res_cosyear[y] >= cosyear)
+			if (res_cosyear[y] >= res_cosyear[n_Years] ||res_cosyear[y] >= cosyear)
 			{
 				if (img_QA[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B] == 1)
 				{
@@ -171,7 +209,7 @@ __global__ void Generate_NDVI_reference(float cosyear, int win_year, float *img_
 			}
 			else
 			{
-				if ((res_cosyear[k + n_dissimilar_year * n_B + n_Years] >= res_cosyear[n_Years * n_Years + 2]) && (img_QA[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B] == 1))
+				if ((res_cosyear[k + n_dissimilar_year * n_B + n_Years + 2] >= res_cosyear[n_Years] || res_cosyear[k + n_dissimilar_year * n_B + n_Years + 2] >= cosyear) && (img_QA[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B] == 0 || img_QA[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B] == 1))
 				{
 					count_img_QA++;
 					mean_img_QA += img_NDVI[i + j * n_X + k * n_X * n_Y + y * n_X * n_Y * n_B];
@@ -181,7 +219,7 @@ __global__ void Generate_NDVI_reference(float cosyear, int win_year, float *img_
 		}
 		if (count_img_QA >= 1)
 		{
-			reference_data[i + j * n_X + k * n_X * n_Y] = mean_img_QA / count_img_QA;
+			reference_data[i + j*n_X + k*n_X*n_Y] = mean_img_QA / count_img_QA;
 			res_vec_res1[count_vec_res1++] = k;
 		}
 	}
@@ -324,7 +362,7 @@ __global__ void Compute_d_res(float *img_NDVI, float*img_QA, float *reference_da
 					d_res[(i + si + (j + sj)*n_X)*(2 * win + 1)*(2 * win + 1) * 4 + (2 * win + 1)*(2 * win + 1) * 3 - si + win + (-1 * sj + win)*(2 * win + 1)] = xy_sum / sqrt(x2_sum*y2_sum);
 				}
 
-				if (reference_data[(i + si) + (j + sj + Buffer_Up)*n_X + 3 * n_X*n_Y] == 0)
+				if (reference_data[(i + si) + (j + sj + Buffer_Up)*n_X + 3 * n_X*n_Y] == 0) //Why 3?
 				{
 					corr_res[si + win + (sj + win)*(2 * win + 1)] = 0;
 					Slope_res[si + win + (sj + win)*(2 * win + 1)] = 0;
@@ -399,7 +437,7 @@ __global__ void STSG_filter(float *img_NDVI, float *img_QA, float *reference_dat
 				vector_in_max_3 = vector_in[k];
 		}
 
-		if (((vector_in_max_1 + vector_in_max_2 + vector_in_max_3) / 3) > 0.15)
+		if (((vector_in_max_1 + vector_in_max_2 + vector_in_max_3) / 3) > 0.15)	//Why top 3?
 		{
 			int indic = 0;
 			//searching similar pixels
@@ -448,7 +486,7 @@ __global__ void STSG_filter(float *img_NDVI, float *img_QA, float *reference_dat
 					aap = 0;
 			}
 
-			//generating the trend curve
+			//generate the trend curve
 			float *trend_NDVI = &d_res[(i + j*n_X)*(2 * win + 1)*(2 * win + 1) * 4];
 			if (aap == 1)
 			{
@@ -506,7 +544,7 @@ __global__ void STSG_filter(float *img_NDVI, float *img_QA, float *reference_dat
 					}
 				}
 
-				//generating the trend NDVI
+				//generating the trend_NDVI
 				if (count_trend_NDVI >= n_B / 2 && count_conres == 0)
 				{
 					for (int m = 0; m < nocount_trend_NDVI; m++)
@@ -575,7 +613,7 @@ __global__ void STSG_filter(float *img_NDVI, float *img_QA, float *reference_dat
 			else
 				indic = 0;
 
-			//STSG
+			//begin; STSG
 			if (indic == 1)
 			{
 				if (snow_address == 1)
@@ -617,7 +655,7 @@ __global__ void STSG_filter(float *img_NDVI, float *img_QA, float *reference_dat
 					}
 				}
 
-				//calculating the weight for each point
+				//Calculate the weights for each point
 				float gdis = 0.0;
 				float *fl = &d_res[(i + j*n_X)*(2 * win + 1)*(2 * win + 1) * 4 + (2 * win + 1)*(2 * win + 1) * 2];
 				int count_fl = 0;
@@ -675,7 +713,8 @@ __global__ void STSG_filter(float *img_NDVI, float *img_QA, float *reference_dat
 					loop_times = loop_times + 1;
 					for (int k = 0; k < n_B; k++)
 						vec_fil[k] = trend_NDVI[k];
-					//The Savitzky-Golay fitting; set the window width(4, 4) and degree(6) for repetition
+					//The Savitzky - Golay fitting
+					//savgolFilter = SAVGOL(4, 4, 0, 6); set the window width(4, 4) and degree(6) for repetition
 					double savgolFilter[] = { -0.00543880, 0.0435097, -0.152289, 0.304585, 0.619267, 0.304585, -0.152289, 0.0435097, -0.00543880 };
 					int savgolFilterW = sizeof(savgolFilter) / sizeof(savgolFilter[0]);
 					int ra4W = n_B;
@@ -697,7 +736,7 @@ __global__ void STSG_filter(float *img_NDVI, float *img_QA, float *reference_dat
 						trend_NDVI[ii] = temp;
 					}
 					ormax = gdis;
-					//calculating the fitting-effect index
+					//Calculate the fitting - effect index
 					gdis = 0.0;
 					for (int k = 0; k < n_B; k++)
 					{
@@ -725,7 +764,7 @@ __global__ void STSG_filter(float *img_NDVI, float *img_QA, float *reference_dat
 				}
 			}
 
-			//SG
+			// SG filter
 			if (indic == 0)
 			{
 				if (snow_address == 1)
@@ -815,7 +854,7 @@ __global__ void STSG_filter(float *img_NDVI, float *img_QA, float *reference_dat
 				}
 
 				float* rst = &d_res[(i + j*n_X)*(2 * win + 1)*(2 * win + 1) * 4 + (2 * win + 1)*(2 * win + 1) * 3];
-				//set the window width(4, 4) and degree(2) for computing trend curve
+				//savgolFilter = SAVGOL(4, 4, 0, 2); set the window width(4, 4) and degree(2) for computing trend curve
 				double savgolFilter[] = { -0.0909091, 0.0606061, 0.168831, 0.233766, 0.255411, 0.233766, 0.168831, 0.0606061, -0.0909091 };
 				int savgolFilterW = sizeof(savgolFilter) / sizeof(savgolFilter[0]);
 				int vector_inW = n_B;
@@ -837,7 +876,7 @@ __global__ void STSG_filter(float *img_NDVI, float *img_QA, float *reference_dat
 					rst[ii] = temp;
 				}
 
-				//Calculating the weight for each point
+				//Calculate the weights for each point
 				float gdis = 0.0;
 				float *fl = &d_res[(i + j*n_X)*(2 * win + 1)*(2 * win + 1) * 4 + (2 * win + 1)*(2 * win + 1) * 2];
 				float maxdif = 0;
@@ -876,7 +915,8 @@ __global__ void STSG_filter(float *img_NDVI, float *img_QA, float *reference_dat
 					loop_times = loop_times + 1;
 					for (int k = 0; k < n_B; k++)
 						vector_out[i + (j + StartY)*n_X + k*n_X*TotalY + y*n_X*TotalY*n_B] = rst[k];
-					//The Savitzky-Golay fitting; set the window width(4, 4) and degree(6) for repetition
+					//The Savitzky - Golay fitting
+					//savgolFilter = SAVGOL(4, 4, 0, 6); set the window width(4, 4) and degree(6) for repetition
 					double savgolFilter[] = { -0.00543880, 0.0435097, -0.152289, 0.304585, 0.619267, 0.304585, -0.152289, 0.0435097, -0.00543880 };
 					int savgolFilterW = sizeof(savgolFilter) / sizeof(savgolFilter[0]);
 					int ra4W = n_B;
@@ -898,7 +938,7 @@ __global__ void STSG_filter(float *img_NDVI, float *img_QA, float *reference_dat
 						rst[ii] = temp;
 					}
 					ormax = gdis;
-					//Calculating the fitting-effect index
+					//Calculate the fitting - effect index
 					gdis = 0.0;
 					for (int k = 0; k < n_B; k++)
 					{

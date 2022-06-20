@@ -5,6 +5,9 @@
 //This is a parallel computing code using GPU.
 //
 //Coded by Yang Xue
+//Reference:Xue Yang, Jin Chen, Qingfeng Guan, Huan Gao, and Wei Xia.
+//¡°Enhanced Spatial-Temporal Savitzky-Golay Method for Reconstructing High-quality NDVI Time Series: Reduced Sensitivity
+//to Quality Flags and Improved Computational Efficiency.¡± Transactions on Geoscience and Remote Sensing, Under Review.
 //******************************************************************
 
 #include "Filter.h"
