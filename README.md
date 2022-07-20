@@ -38,9 +38,9 @@ To address the above issues of STSG, we designed and implemented a GPU-enabled S
 - For the Windows operating system (using MS Visual Studio as an example)
 
 1. Open all the source codes in Visual Studio
-2. Click menu Project -\&gt; Properties -\&gt; VC++ Directories -\&gt; Include Directories, and add the &quot;include&quot; directory of GDAL (e.g., C:\GDAL\include)
-3. Click menu Project -\&gt; Properties -\&gt; VC++ Directories -\&gt; Lib Directories, and add the &quot;lib&quot; directory of GDAL (e.g., C:\GDAL\lib)
-4. Click menu Build -\&gt; Build Solution
+2. Click menu Project -> Properties -> VC++ Directories -> Include Directories, and add the "include" directory of GDAL (e.g., C:\GDAL\include)
+3. Click menu Project -> Properties -> VC++ Directories -> Lib Directories, and add the "lib" directory of GDAL (e.g., C:\GDAL\lib)
+4. Click menu Build -> Build Solution
 5. Once successfully compiled, an executable file, cuSTSG.exe, is created.
 
 - For the Linux/Unix operating system (using the CUDA compiler --- nvcc)
