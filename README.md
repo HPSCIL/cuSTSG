@@ -19,14 +19,16 @@ To address the above issues of STSG, we designed and implemented a GPU-enabled S
 - Supports both Windows and Linux/Unix operating systems
 
 **References**
-
+-	Yang, X., Chen, J., Guan, Q., Gao, H., Xia, W., 2022. Enhanced Spatial–Temporal Savitzky–Golay Method for Reconstructing High-quality NDVI Time Series: Reduced Sensitivity to Quality Flags and Improved Computational Efficiency. IEEE Transactions on Geoscience and Remote Sensing, doi: 10.1109/TGRS.2022.3190475.
 - Cao, R., Chen, Y., Shen, M., Chen, J., Zhou, J., Wang, C., Yang, W., 2018. A simple method to improve the quality of NDVI time-series data by integrating spatiotemporal information with the Savitzky-Golay filter. Remote Sensing of Environment 217, 244–257.
 - Chen, J., Jönsson, Per., Tamura, M., Gu, Z., Matsushita, B., Eklundh, L., 2004. A simple method for reconstructing a high-quality NDVI time-series data set based on the Savitzky–Golay filter. Remote Sensing of Environment 91, 332–344.
 
 **To Cite cuSTSG in Publications**
 
-- A paper describing cuSTSG will be submitted to a scientific journal for publication soon
-- For now, you may just cite the URL of the source codes of cuSTSG (https://github.com/HPSCIL/cuSTSG) in your publications
+-	Please cite the following reference:
+   -	Yang, X., Chen, J., Guan, Q., Gao, H., Xia, W., 2022. Enhanced Spatial–Temporal Savitzky–Golay Method for Reconstructing High-quality NDVI Time Series: Reduced Sensitivity to Quality Flags and Improved Computational Efficiency. IEEE Transactions on Geoscience and Remote Sensing, doi: 10.1109/TGRS.2022.3190475.
+-	You may contact the e-mail aurora@cug.edu.cn if you have further questions about the usage of codes and datasets.
+-	For any possible research collaboration, please contact Prof. Qingfeng Guan (guanqf@cug.edu.cn).
 
 **Compilation**
 
