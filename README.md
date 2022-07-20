@@ -26,7 +26,7 @@ To address the above issues of STSG, we designed and implemented a GPU-enabled S
 **To Cite cuSTSG in Publications**
 
 -	Please cite the following reference:
-   -	Yang, X., Chen, J., Guan, Q., Gao, H., Xia, W., 2022. Enhanced Spatial–Temporal Savitzky–Golay Method for Reconstructing High-quality NDVI Time Series: Reduced Sensitivity to Quality Flags and Improved Computational Efficiency. IEEE Transactions on Geoscience and Remote Sensing, doi: 10.1109/TGRS.2022.3190475.
+  - Yang, X., Chen, J., Guan, Q., Gao, H., Xia, W., 2022. Enhanced Spatial–Temporal Savitzky–Golay Method for Reconstructing High-quality NDVI Time Series: Reduced Sensitivity to Quality Flags and Improved Computational Efficiency. IEEE Transactions on Geoscience and Remote Sensing, doi: 10.1109/TGRS.2022.3190475.
 -	You may contact the e-mail aurora@cug.edu.cn if you have further questions about the usage of codes and datasets.
 -	For any possible research collaboration, please contact Prof. Qingfeng Guan (guanqf@cug.edu.cn).
 
